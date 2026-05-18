@@ -1,18 +1,22 @@
 <template>
 	<div
-		class="min-h-screen flex flex-col items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8"
+		class="min-h-screen flex flex-col items-center justify-center py-12 px-4 sm:px-6 lg:px-8"
+		style="background: #85b9f3; font-family: Arial, sans-serif"
 	>
 		<div class="max-w-md w-full space-y-8">
 			<div class="text-center">
-				<h2 class="mt-6 text-3xl font-extrabold text-gray-900">
+				<h2
+					class="mt-6 text-3xl font-extrabold text-gray-900"
+					style="font-size: 34px; font-weight: bold; color: #0052b4; margin-bottom: 5px"
+				>
 					{{ __("Sign in to Yana POS") }}
 				</h2>
-				<p class="mt-2 text-sm text-gray-600">
+				<p class="mt-2 text-sm text-gray-600" style="color: #0052b4; font-size: 16px">
 					{{ __("Access your point of sale system") }}
 				</p>
 			</div>
 
-			<div class="bg-white py-8 px-6 shadow rounded-lg">
+			<div class="py-8 px-6 shadow rounded-lg" style="background: #ffd500">
 				<form class="space-y-6" @submit.prevent="submit">
 					<div v-if="session.login.error" class="rounded-md bg-red-50 p-4">
 						<div class="flex">
