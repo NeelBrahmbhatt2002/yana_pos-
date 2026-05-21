@@ -7,58 +7,186 @@ import frappe
 from frappe import _
 
 
+# @frappe.whitelist()
+# def get_customers(search_term="", pos_profile=None, limit=20, modified_since=None):
+
+#     """
+#     Search customers for inline customer selection in POS.
+
+#     Args:
+#         search_term (str): Search query (name, mobile, or customer ID)
+#         pos_profile (str): POS Profile to filter by customer group
+#         limit (int): Maximum number of results to return
+#         modified_since (str): Fetch customers modified after this timestamp (ISO format)
+
+#     Returns:
+#         list: List of customer dictionaries with name, customer_name, mobile_no, email_id, disabled
+#     """
+#     try:
+#         frappe.logger().debug(
+#             f"get_customers called with search_term={search_term}, pos_profile={pos_profile}, limit={limit}, modified_since={modified_since}"
+#         )
+
+#         filters = {}
+
+#         # Filter by POS Profile customer group if specified
+#         if pos_profile:
+#             frappe.logger().debug(f"Loading POS Profile: {pos_profile}")
+#             profile_doc = frappe.get_cached_doc("POS Profile", pos_profile)
+#             # Check if customer_group field exists (it may not exist in all versions)
+#             if hasattr(profile_doc, "customer_group") and profile_doc.customer_group:
+#                 filters["customer_group"] = profile_doc.customer_group
+#                 frappe.logger().debug(f"Filtering by customer_group: {profile_doc.customer_group}")
+
+#         if modified_since:
+#             # Delta sync: include disabled customers so frontend can purge them
+#             filters["modified"] = [">=", modified_since]
+#         else:
+#             # Full fetch: only active customers
+#             filters["disabled"] = 0
+
+#         customer_limit = limit if limit not in (None, 0) else frappe.db.count("Customer", filters)
+#         result = frappe.get_all(
+#             "Customer",
+#             filters=filters,
+#             fields=["name", "customer_name", "mobile_no", "email_id", "disabled"],
+#             limit=customer_limit,
+#             order_by="customer_name asc",
+#         )
+#         frappe.logger().debug(f"get_customers returned {len(result)} customers")
+#         return result
+#     except Exception as e:
+#         frappe.logger().error(f"Error in get_customers: {str(e)}")
+#         frappe.logger().error(frappe.get_traceback())
+#         frappe.throw(_("Error fetching customers: {0}").format(str(e)))
+
 @frappe.whitelist()
 def get_customers(search_term="", pos_profile=None, limit=20, modified_since=None):
 
     """
     Search customers for inline customer selection in POS.
-
-    Args:
-        search_term (str): Search query (name, mobile, or customer ID)
-        pos_profile (str): POS Profile to filter by customer group
-        limit (int): Maximum number of results to return
-        modified_since (str): Fetch customers modified after this timestamp (ISO format)
-
-    Returns:
-        list: List of customer dictionaries with name, customer_name, mobile_no, email_id, disabled
     """
+
     try:
+
         frappe.logger().debug(
-            f"get_customers called with search_term={search_term}, pos_profile={pos_profile}, limit={limit}, modified_since={modified_since}"
+            f"get_customers called with search_term={search_term}, "
+            f"pos_profile={pos_profile}, limit={limit}, "
+            f"modified_since={modified_since}"
         )
 
         filters = {}
+        or_filters = []
 
-        # Filter by POS Profile customer group if specified
+        # =====================================================
+        # COMPANY-WISE CUSTOMER FILTERING
+        # =====================================================
+
+        current_company = frappe.defaults.get_user_default("Company")
+
+        if current_company:
+
+            # Normalize company name
+            # Example:
+            # "Mercia Hospitality Solutions limited"
+            # -> "mercia hospitality solutions"
+
+            company_prefix = current_company.split(" ")[0].lower()
+
+            # Find company admin user
+            # Example:
+            # "Mercia Hospitality Solutions Admin"
+
+            admin_user = frappe.db.sql("""
+                SELECT name
+                FROM `tabUser`
+                WHERE LOWER(full_name) LIKE %s
+                LIMIT 1
+            """, (f"{company_prefix}%admin",), as_dict=True)
+
+            if admin_user:
+                filters["account_manager"] = admin_user[0].name
+                frappe.logger().debug(
+                    f"Filtering customers by owner: {admin_user[0].name}"
+                )
+
+        # =====================================================
+        # POS PROFILE FILTER
+        # =====================================================
+
         if pos_profile:
             frappe.logger().debug(f"Loading POS Profile: {pos_profile}")
+
             profile_doc = frappe.get_cached_doc("POS Profile", pos_profile)
-            # Check if customer_group field exists (it may not exist in all versions)
+
             if hasattr(profile_doc, "customer_group") and profile_doc.customer_group:
                 filters["customer_group"] = profile_doc.customer_group
-                frappe.logger().debug(f"Filtering by customer_group: {profile_doc.customer_group}")
+
+                frappe.logger().debug(
+                    f"Filtering by customer_group: "
+                    f"{profile_doc.customer_group}"
+                )
+
+        # =====================================================
+        # MODIFIED / DISABLED FILTER
+        # =====================================================
 
         if modified_since:
-            # Delta sync: include disabled customers so frontend can purge them
+            # Delta sync
             filters["modified"] = [">=", modified_since]
         else:
-            # Full fetch: only active customers
+            # Full fetch
             filters["disabled"] = 0
 
-        customer_limit = limit if limit not in (None, 0) else frappe.db.count("Customer", filters)
+        # =====================================================
+        # SEARCH FILTERS
+        # =====================================================
+
+        if search_term:
+            or_filters = [
+                ["customer_name", "like", f"%{search_term}%"],
+                ["name", "like", f"%{search_term}%"],
+                ["mobile_no", "like", f"%{search_term}%"],
+            ]
+
+        # =====================================================
+        # FETCH CUSTOMERS
+        # =====================================================
+
+        customer_limit = (
+            limit
+            if limit not in (None, 0)
+            else frappe.db.count("Customer", filters)
+        )
+
         result = frappe.get_all(
             "Customer",
             filters=filters,
-            fields=["name", "customer_name", "mobile_no", "email_id", "disabled"],
+            or_filters=or_filters,
+            fields=[
+                "name",
+                "customer_name",
+                "mobile_no",
+                "email_id",
+                "disabled",
+            ],
             limit=customer_limit,
             order_by="customer_name asc",
         )
-        frappe.logger().debug(f"get_customers returned {len(result)} customers")
+
+        frappe.logger().debug(
+            f"get_customers returned {len(result)} customers"
+        )
+
         return result
+
     except Exception as e:
         frappe.logger().error(f"Error in get_customers: {str(e)}")
         frappe.logger().error(frappe.get_traceback())
-        frappe.throw(_("Error fetching customers: {0}").format(str(e)))
+
+        frappe.throw(
+            _("Error fetching customers: {0}").format(str(e))
+        )
 
 
 @frappe.whitelist()
