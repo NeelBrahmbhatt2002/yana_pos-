@@ -5,6 +5,12 @@
 	>
 		<div class="max-w-md w-full space-y-8">
 			<div class="text-center">
+				<!-- Yana Logo -->
+				<img
+					src="/yanaERP_logo_transparent_F2.png"
+					alt="YanaERP"
+					style="width: 180px; height: auto; margin: 0 auto 20px auto; display: block"
+				/>
 				<h2
 					class="mt-6 text-3xl font-extrabold text-gray-900"
 					style="font-size: 34px; font-weight: bold; color: #0052b4; margin-bottom: 5px"
